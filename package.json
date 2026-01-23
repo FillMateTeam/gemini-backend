@@ -1,16 +1,29 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "Gemini backend for Flutter app",
+  "description": "OpenRouter backend for learning app",
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
-  "dependencies": {
-    "@google/generative-ai": "^0.24.1",
-    "cors": "^2.8.5",
-    "dotenv": "^17.2.3",
-    "express": "^5.2.1"
-  }
+ "dependencies": {
+  "axios": "^1.13.2",
+  "cors": "^2.8.6",
+  "dotenv": "^17.2.3",
+  "express": "^5.2.1"
+
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FillMateTeam/gemini-backend.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/FillMateTeam/gemini-backend/issues"
+  },
+  "homepage": "https://github.com/FillMateTeam/gemini-backend#readme"
 }
