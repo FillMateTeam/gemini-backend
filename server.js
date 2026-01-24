@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import axios from "axios";
+import { OpenRouter } from "@openrouter/sdk";
 
 dotenv.config();
 
@@ -9,57 +9,63 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get("/", (req, res) => {
-  res.send("✅ Backend OK - server.js is running");
+// 🔑 OpenRouter client
+const openrouter = new OpenRouter({
+  apiKey: process.env.OPENROUTER_API_KEY,
 });
 
+// ✅ Health check
+app.get("/", (req, res) => {
+  res.send("✅ Backend OK - OpenRouter is running");
+});
+
+// 🧠 AI học Y Dược
 app.post("/api/chat", async (req, res) => {
   try {
-    const prompt = req.body.prompt || req.body.message;
-    console.log("📨 Received:", prompt);
+    const prompt = req.body.message || req.body.prompt;
     if (!prompt) {
-      return res.status(400).json({ error: "Thiếu prompt" });
+      return res.status(400).json({ error: "Thiếu nội dung câu hỏi" });
     }
 
-    console.log("🔑 HF_KEY:", process.env.HF_API_KEY?.slice(0, 10));
-    const hfRes = await axios.post(
-      "https://router.huggingface.co/hf-inference/models/google/gemma-2b-it",
-      {
-        inputs: prompt,
-        parameters: {
-          max_new_tokens: 200,
-          temperature: 0.7,
-        },
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.HF_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        timeout: 60000, // cold start
-      }
-    );
+    console.log("📨 Question:", prompt);
 
-    let reply = "";
+    const systemPrompt = `
+Bạn là trợ lý học tập Y Dược.
+Chỉ trả lời với mục đích GIÁO DỤC.
+Không đưa liều dùng điều trị cụ thể.
+Không chẩn đoán hay thay thế bác sĩ.
+Giải thích rõ ràng, dễ hiểu, có cơ chế.
+`;
 
-    if (Array.isArray(hfRes.data)) {
-      reply = hfRes.data[0]?.generated_text ?? "AI không trả lời";
-    } else if (hfRes.data.generated_text) {
-      reply = hfRes.data.generated_text;
-    } else {
-      reply = JSON.stringify(hfRes.data);
-    }
+    // ❌ KHÔNG STREAM
+    const completion = await openrouter.chat.send({
+      model: "deepseek/deepseek-r1-0528:free",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: prompt },
+      ],
+    });
+
+    let reply =
+      completion.choices?.[0]?.message?.content ??
+      "AI không trả lời được 😢";
+
+    // 🧹 Lọc think token
+    reply = reply.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+
+    console.log("🤖 Reply:", reply);
 
     res.json({ reply });
 
   } catch (err) {
-    console.error("❌ HF ERROR:", err.response?.data || err.message);
-    res.status(500).json({
-      error: err.response?.data || err.message,
-    });
+    console.error("❌ OpenRouter ERROR:", err);
+    res.status(500).json({ error: "AI lỗi rồi 😭" });
   }
 });
 
-app.listen(3000, () => {
-  console.log("🔥 Backend running at http://localhost:3000");
+// 🚀 Start server
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`🔥 Backend running on all interfaces :${PORT}`);
 });
