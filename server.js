@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import fetch from "node-fetch";
 
 
 dotenv.config();
@@ -24,7 +23,7 @@ app.post("/api/chat", async (req, res) => {
     console.log("📨 Question:", prompt);
 
     const MODELS = [
-      "google/gemma-3-12b-it:free",
+      "tngtech/deepseek-r1t-chimera:free",
     ];
 
     let reply = null;
