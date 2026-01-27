@@ -37,35 +37,54 @@ Không chẩn đoán hay thay thế bác sĩ.
 Giải thích rõ ràng, dễ hiểu, có cơ chế.
 `;
 
-    // ❌ KHÔNG STREAM
-    const completion = await openrouter.chat.send({
-      model: "deepseek/deepseek-r1-0528:free",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: prompt },
-      ],
-    });
+    const messages = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: prompt },
+    ];
 
-    let reply =
-      completion.choices?.[0]?.message?.content ??
-      "AI không trả lời được 😢";
+    // ✅ Danh sách model (từ nhẹ → nặng)
+    const MODELS = [
+      "liquidai/lfm2.5-1.2b-thinking",
+    ];
 
-    // 🧹 Lọc think token
+    let reply = null;
+
+    for (const model of MODELS) {
+      try {
+        console.log(`🤖 Trying model: ${model}`);
+
+        const completion = await openrouter.chat.send({
+          model,
+          messages,
+        });
+
+        reply = completion.choices?.[0]?.message?.content;
+        if (reply) break;
+
+      } catch (err) {
+        console.warn(`⚠️ Model failed: ${model}`);
+      }
+    }
+
+    if (!reply) {
+      return res.status(500).json({ error: "AI không phản hồi được 😢" });
+    }
+
+    // 🧹 Lọc think token (phòng khi có)
     reply = reply.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
 
-    console.log("🤖 Reply:", reply);
+    console.log("✅ Reply OK");
 
     res.json({ reply });
 
   } catch (err) {
-    console.error("❌ OpenRouter ERROR:", err);
+    console.error("❌ Backend ERROR:", err);
     res.status(500).json({ error: "AI lỗi rồi 😭" });
   }
 });
 
-// 🚀 Start server
-
+// 🚀 Start server (Render-friendly)
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🔥 Backend running on all interfaces :${PORT}`);
+  console.log(`🔥 Backend running on port ${PORT}`);
 });
