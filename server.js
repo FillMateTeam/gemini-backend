@@ -77,8 +77,7 @@ Giải thích rõ ràng, dễ hiểu, có cơ chế.
 
     // 👉 Model list (ổn định trước, thinking sau)
     const MODELS = [
-      "google/gemini-1.5-flash",
-      "liquidai/lfm2.5-1.2b-thinking",
+       "tngtech/deepseek-r1t-chimera:free",
     ];
 
     let reply = null;
