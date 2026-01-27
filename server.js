@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { OpenRouter } from "@openrouter/sdk";
+import fetch from "node-fetch";
 
 dotenv.config();
 
@@ -9,75 +9,21 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// =====================
-// OpenRouter client
-// =====================
-const openrouter = new OpenRouter({
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
-
-if (!process.env.OPENROUTER_API_KEY) {
-  console.error("❌ OPENROUTER_API_KEY is missing");
-}
-
-// =====================
-// Utils: extract reply (IMPORTANT)
-// =====================
-function extractReply(content) {
-  if (!content) return null;
-
-  // Case 1: string
-  if (typeof content === "string") {
-    return content.trim();
-  }
-
-  // Case 2: array (thinking / reasoning models)
-  if (Array.isArray(content)) {
-    return content
-      .map((c) => c?.text || "")
-      .join("\n")
-      .trim();
-  }
-
-  return null;
-}
-
-// =====================
-// Health check
-// =====================
 app.get("/", (req, res) => {
-  res.send("✅ Backend OK - OpenRouter ready");
+  res.send("✅ Backend OK - OpenRouter running");
 });
 
-// =====================
-// Chat API
-// =====================
 app.post("/api/chat", async (req, res) => {
   try {
-    const prompt = req.body?.message || req.body?.prompt;
-
+    const prompt = req.body.message;
     if (!prompt) {
-      return res.status(400).json({ error: "Thiếu nội dung câu hỏi" });
+      return res.status(400).json({ error: "Missing message" });
     }
 
     console.log("📨 Question:", prompt);
 
-    const systemPrompt = `
-Bạn là trợ lý học tập Y Dược.
-Chỉ trả lời với mục đích GIÁO DỤC.
-Không đưa liều dùng điều trị cụ thể.
-Không chẩn đoán hay thay thế bác sĩ.
-Giải thích rõ ràng, dễ hiểu, có cơ chế.
-`.trim();
-
-    const messages = [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: prompt },
-    ];
-
-    // 👉 Model list (ổn định trước, thinking sau)
     const MODELS = [
-       "tngtech/deepseek-r1t-chimera:free",
+      "tngtech/deepseek-r1t-chimera:free",
     ];
 
     let reply = null;
@@ -85,66 +31,62 @@ Giải thích rõ ràng, dễ hiểu, có cơ chế.
 
     for (const model of MODELS) {
       try {
-        console.log(`🤖 Trying model: ${model}`);
+        console.log("🤖 Trying model:", model);
 
-        const completion =
-          await openrouter.chat.completions.create({
-            model,
-            messages,
-          });
-
-        reply = extractReply(
-          completion?.choices?.[0]?.message?.content
+        const response = await fetch(
+          "https://openrouter.ai/api/v1/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+              "Content-Type": "application/json",
+              "HTTP-Referer": "https://fillmate.app",
+              "X-Title": "FillMate AI",
+            },
+            body: JSON.stringify({
+              model,
+              messages: [
+                {
+                  role: "system",
+                  content:
+                    "Bạn là trợ lý học tập Y Dược. Chỉ phục vụ mục đích giáo dục.",
+                },
+                { role: "user", content: prompt },
+              ],
+            }),
+          }
         );
 
-        // Remove <think> if any
-        if (reply) {
-          reply = reply
-            .replace(/<think>[\s\S]*?<\/think>/g, "")
-            .trim();
+        const data = await response.json();
 
-          if (reply) break;
-        }
+        reply = data?.choices?.[0]?.message?.content;
+        if (reply) break;
+
       } catch (err) {
         lastError = err;
-        console.warn(`⚠️ Model failed: ${model}`);
-        console.error(
-          err?.error?.message || err?.message || err
-        );
+        console.warn("⚠️ Model failed:", model);
       }
     }
 
     if (!reply) {
-      console.error("❌ All models failed", lastError);
       return res.status(500).json({
-        error: "AI không phản hồi được",
-        detail:
-          lastError?.error?.message ||
-          lastError?.message ||
-          "Unknown error",
+        error: "All models failed",
+        detail: lastError?.message,
       });
     }
 
-    console.log("✅ Reply OK");
+    // remove thinking tags
+    reply = reply.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+
     res.json({ reply });
+
   } catch (err) {
-    console.error(
-      "❌ Backend CRASH:",
-      err?.error?.message || err?.message || err
-    );
-    res.status(500).json({
-      error:
-        err?.error?.message ||
-        err?.message ||
-        "Backend error",
-    });
+    console.error("❌ Backend error:", err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-// =====================
-// Start server (Render)
-// =====================
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🔥 Backend running on port ${PORT}`);
+  console.log("🔥 Backend running on port", PORT);
 });
