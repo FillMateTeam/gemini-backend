@@ -9,20 +9,53 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔑 OpenRouter client
+// =====================
+// OpenRouter client
+// =====================
 const openrouter = new OpenRouter({
   apiKey: process.env.OPENROUTER_API_KEY,
 });
 
-// ✅ Health check
+if (!process.env.OPENROUTER_API_KEY) {
+  console.error("❌ OPENROUTER_API_KEY is missing");
+}
+
+// =====================
+// Utils: extract reply (IMPORTANT)
+// =====================
+function extractReply(content) {
+  if (!content) return null;
+
+  // Case 1: string
+  if (typeof content === "string") {
+    return content.trim();
+  }
+
+  // Case 2: array (thinking / reasoning models)
+  if (Array.isArray(content)) {
+    return content
+      .map((c) => c?.text || "")
+      .join("\n")
+      .trim();
+  }
+
+  return null;
+}
+
+// =====================
+// Health check
+// =====================
 app.get("/", (req, res) => {
-  res.send("✅ Backend OK - OpenRouter is running");
+  res.send("✅ Backend OK - OpenRouter ready");
 });
 
-// 🧠 AI học Y Dược
+// =====================
+// Chat API
+// =====================
 app.post("/api/chat", async (req, res) => {
   try {
-    const prompt = req.body.message || req.body.prompt;
+    const prompt = req.body?.message || req.body?.prompt;
+
     if (!prompt) {
       return res.status(400).json({ error: "Thiếu nội dung câu hỏi" });
     }
@@ -35,55 +68,83 @@ Chỉ trả lời với mục đích GIÁO DỤC.
 Không đưa liều dùng điều trị cụ thể.
 Không chẩn đoán hay thay thế bác sĩ.
 Giải thích rõ ràng, dễ hiểu, có cơ chế.
-`;
+`.trim();
 
     const messages = [
       { role: "system", content: systemPrompt },
       { role: "user", content: prompt },
     ];
 
-    // ✅ Danh sách model (từ nhẹ → nặng)
+    // 👉 Model list (ổn định trước, thinking sau)
     const MODELS = [
+      "google/gemini-1.5-flash",
       "liquidai/lfm2.5-1.2b-thinking",
     ];
 
     let reply = null;
+    let lastError = null;
 
     for (const model of MODELS) {
       try {
         console.log(`🤖 Trying model: ${model}`);
 
-        const completion = await openrouter.chat.send({
-          model,
-          messages,
-        });
+        const completion =
+          await openrouter.chat.completions.create({
+            model,
+            messages,
+          });
 
-        reply = completion.choices?.[0]?.message?.content;
-        if (reply) break;
+        reply = extractReply(
+          completion?.choices?.[0]?.message?.content
+        );
 
+        // Remove <think> if any
+        if (reply) {
+          reply = reply
+            .replace(/<think>[\s\S]*?<\/think>/g, "")
+            .trim();
+
+          if (reply) break;
+        }
       } catch (err) {
+        lastError = err;
         console.warn(`⚠️ Model failed: ${model}`);
+        console.error(
+          err?.error?.message || err?.message || err
+        );
       }
     }
 
     if (!reply) {
-      return res.status(500).json({ error: "AI không phản hồi được 😢" });
+      console.error("❌ All models failed", lastError);
+      return res.status(500).json({
+        error: "AI không phản hồi được",
+        detail:
+          lastError?.error?.message ||
+          lastError?.message ||
+          "Unknown error",
+      });
     }
 
-    // 🧹 Lọc think token (phòng khi có)
-    reply = reply.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-
     console.log("✅ Reply OK");
-
     res.json({ reply });
-
   } catch (err) {
-    console.error("❌ Backend ERROR:", err);
-    res.status(500).json({ error: "AI lỗi rồi 😭" });
+    console.error(
+      "❌ Backend CRASH:",
+      err?.error?.message || err?.message || err
+    );
+    res.status(500).json({
+      error:
+        err?.error?.message ||
+        err?.message ||
+        "Backend error",
+    });
   }
 });
 
-// 🚀 Start server (Render-friendly)
+// =====================
+// Start server (Render)
+// =====================
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🔥 Backend running on port ${PORT}`);
