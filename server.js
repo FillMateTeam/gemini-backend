@@ -23,7 +23,7 @@ app.post("/api/chat", async (req, res) => {
     console.log("📨 Question:", prompt);
 
     const MODELS = [
-      "tngtech/deepseek-r1t-chimera:free",
+      "google/gemma-3-12b-it:free",
     ];
 
     let reply = null;
